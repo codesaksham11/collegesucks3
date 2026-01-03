@@ -2,52 +2,65 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Neuro-Drift: Plasticity Trainer</title>
+    <!-- Vital for Mobile: Prevents zooming and sets correct scale -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Neuro-Drift Mobile</title>
     <style>
         body {
             margin: 0;
-            background-color: #111;
+            background-color: #000;
             color: #eee;
             font-family: 'Courier New', Courier, monospace;
+            overflow: hidden; /* Prevent scrolling */
+            touch-action: none; /* Disable default touch actions like pinch */
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
-            height: 100vh;
-            overflow: hidden;
         }
         canvas {
-            border: 2px solid #444;
-            box-shadow: 0 0 20px rgba(0, 255, 255, 0.1);
+            display: block;
             background-color: #000;
         }
         #ui-layer {
             position: absolute;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
+            top: 10px;
+            left: 0;
+            width: 100%;
+            padding: 0 10px;
+            box-sizing: border-box;
+            pointer-events: none; /* Let touches pass through to canvas */
             text-align: center;
-            pointer-events: none;
-            width: 600px;
         }
-        h1 { margin: 0; font-size: 18px; color: #888; }
-        .hud-row { display: flex; justify-content: space-between; margin-top: 10px; font-weight: bold;}
-        .stat { background: rgba(0,0,0,0.7); padding: 5px 10px; border-radius: 4px; border: 1px solid #333; }
+        h1 { margin: 0; font-size: 16px; color: #666; letter-spacing: 2px; }
+        .hud-row { 
+            display: flex; 
+            justify-content: space-between; 
+            margin-top: 5px; 
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .stat { 
+            background: rgba(0,0,0,0.6); 
+            padding: 4px 8px; 
+            border-radius: 4px; 
+            border: 1px solid #333; 
+        }
         .inverted-warning {
             color: #ff3333;
             font-weight: bold;
             display: none;
-            animation: blink 1s infinite;
+            animation: blink 0.8s infinite;
+            font-size: 12px;
+            padding-top: 6px;
         }
         #learning-bar-container {
-            width: 100%;
-            height: 10px;
-            background: #333;
-            margin-top: 10px;
-            border-radius: 5px;
+            width: 80%;
+            height: 6px;
+            background: #222;
+            margin: 8px auto 0;
+            border-radius: 3px;
             overflow: hidden;
-            border: 1px solid #555;
+            border: 1px solid #444;
         }
         #learning-bar {
             width: 0%;
@@ -55,18 +68,40 @@
             background: linear-gradient(90deg, #00d2ff, #3a7bd5);
             transition: width 0.2s;
         }
+        /* Mobile Touch Zones Visuals */
+        .touch-hint {
+            position: absolute;
+            bottom: 20px;
+            width: 40%;
+            height: 50px;
+            border: 2px dashed rgba(255,255,255,0.1);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: rgba(255,255,255,0.2);
+            font-size: 12px;
+            pointer-events: none;
+        }
+        #left-hint { left: 5%; }
+        #right-hint { right: 5%; }
+
         @keyframes blink { 50% { opacity: 0; } }
+        
         #message {
             position: absolute;
-            top: 50%;
+            top: 40%;
             left: 50%;
             transform: translate(-50%, -50%);
-            font-size: 24px;
-            background: rgba(0,0,0,0.9);
+            font-size: 20px;
+            background: rgba(0,0,0,0.85);
             padding: 20px;
             border: 1px solid #fff;
             display: none;
             text-align: center;
+            width: 80%;
+            border-radius: 8px;
+            box-shadow: 0 0 15px #000;
         }
     </style>
 </head>
@@ -75,32 +110,33 @@
     <div id="ui-layer">
         <h1>NEURO-DRIFT</h1>
         <div class="hud-row">
-            <div class="stat">LVL: <span id="lvl-display">1</span></div>
-            <div class="stat inverted-warning" id="invert-display">⚠ CONTROLS REVERSED ⚠</div>
-            <div class="stat">SCORE: <span id="score-display">0</span></div>
+            <div class="stat">LVL <span id="lvl-display">1</span></div>
+            <div class="inverted-warning" id="invert-display">⚠ REVERSED ⚠</div>
+            <div class="stat"><span id="score-display">0</span></div>
         </div>
-        <div style="margin-top:5px; font-size: 12px; color: #aaa;">NEURAL ADAPTATION (Pattern Learning)</div>
         <div id="learning-bar-container">
             <div id="learning-bar"></div>
         </div>
     </div>
 
-    <canvas id="gameCanvas" width="600" height="800"></canvas>
-    <div id="message">Press Space to Start</div>
+    <!-- Touch Hints -->
+    <div id="left-hint" class="touch-hint">LEFT</div>
+    <div id="right-hint" class="touch-hint">RIGHT</div>
+
+    <canvas id="gameCanvas"></canvas>
+    <div id="message">TAP TO START</div>
 
     <script>
-        /**
-         * NEURO-DRIFT ENGINE
-         * 
-         * Logic:
-         * 1. Generates a procedural tunnel.
-         * 2. Measures "Adaptation" by calculating the Variance of Error (Player Position vs Center).
-         * 3. Low variance over time = Brain has learned the pattern.
-         * 4. Triggers level up.
-         */
-
         const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { alpha: false }); // Optimization: alpha false for J7
+
+        // Resize handling
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
 
         // Game State
         const state = {
@@ -108,67 +144,85 @@
             gameOver: false,
             score: 0,
             level: 1,
-            adaptation: 0, // 0 to 100
+            adaptation: 0, 
             inverted: false,
             frames: 0
         };
 
-        // Player Configuration
+        // Player Config
         const player = {
-            x: 300,
-            y: 600,
-            radius: 8,
-            speed: 5,
-            dx: 0
+            x: 0, // set in reset
+            y: 0, // set in reset
+            radius: 10, // slightly bigger for mobile visibility
+            speed: 0, // calculated based on width
+            baseSpeedMult: 0.015 // Speed is 1.5% of screen width
         };
 
-        // Path Configuration
+        // Path Config
         const path = {
             segments: [],
-            segmentHeight: 5,
-            baseWidth: 200,
-            currentWidth: 200,
+            segmentHeight: 10, // Higher value = better performance on J7
+            baseWidthRatio: 0.5, // Path is 50% of screen width
+            currentWidth: 0,
             noiseOffset: 0,
-            speed: 3
+            speed: 4 // scroll speed
         };
 
-        // Neural Calculation metrics
+        // Neural Metrics
         const metrics = {
-            errors: [], // Rolling buffer of distance from center
-            historySize: 60, // 1 second at 60fps
+            errors: [],
+            historySize: 45, // Slightly shorter history for mobile
             stabilityTimer: 0,
-            requiredStabilityTime: 300 // Frames required (5 seconds) of stable play to pass
+            requiredStabilityTime: 300 
         };
 
-        // Inputs
-        const keys = {
-            ArrowLeft: false,
-            ArrowRight: false
+        // Inputs (Touch)
+        const inputs = {
+            left: false,
+            right: false
         };
 
-        // DOM Elements
+        // UI Elements
         const elLevel = document.getElementById('lvl-display');
         const elScore = document.getElementById('score-display');
         const elInvert = document.getElementById('invert-display');
         const elBar = document.getElementById('learning-bar');
         const elMsg = document.getElementById('message');
 
+        // --- Input Handling (Mobile Specific) ---
+        
+        function handleTouch(e) {
+            e.preventDefault(); // Prevent browser scrolling
+            
+            // Reset inputs
+            inputs.left = false;
+            inputs.right = false;
+
+            const halfWidth = canvas.width / 2;
+
+            // Check all active touches
+            for (let i = 0; i < e.touches.length; i++) {
+                const tx = e.touches[i].clientX;
+                if (tx < halfWidth) inputs.left = true;
+                else inputs.right = true;
+            }
+
+            // Start game if touched on message
+            if (!state.running && e.type === 'touchstart') {
+                if(state.gameOver) resetGame();
+                else startGame();
+            }
+        }
+
+        window.addEventListener('touchstart', handleTouch, { passive: false });
+        window.addEventListener('touchmove', handleTouch, { passive: false });
+        window.addEventListener('touchend', handleTouch, { passive: false });
+
         // --- Core Logic ---
 
         function init() {
-            window.addEventListener('keydown', e => {
-                if(keys.hasOwnProperty(e.code)) keys[e.code] = true;
-                if(e.code === 'Space') {
-                    if(!state.running) startGame();
-                    else if(state.gameOver) resetGame();
-                }
-            });
-            window.addEventListener('keyup', e => {
-                if(keys.hasOwnProperty(e.code)) keys[e.code] = false;
-            });
-
             resetGame();
-            draw(); // Draw initial static frame
+            draw(); 
         }
 
         function resetGame() {
@@ -179,20 +233,26 @@
             state.inverted = false;
             state.adaptation = 0;
             
+            player.x = canvas.width / 2;
+            player.y = canvas.height * 0.75; // Player sits at bottom 25%
+            player.speed = canvas.width * player.baseSpeedMult;
+
             // Reset Path
-            path.currentWidth = 200;
-            path.speed = 3;
+            path.currentWidth = canvas.width * path.baseWidthRatio;
             path.segments = [];
-            for(let i=0; i < canvas.height / path.segmentHeight + 10; i++) {
+            // Fill screen with straight path
+            for(let i=0; i < canvas.height / path.segmentHeight + 5; i++) {
                 path.segments.push({
                     x: canvas.width/2,
                     w: path.currentWidth
                 });
             }
 
-            player.x = canvas.width / 2;
+            metrics.stabilityTimer = 0;
+            metrics.errors = [];
+
             elMsg.style.display = "block";
-            elMsg.innerText = "Press SPACE to Initialize Neural Link";
+            elMsg.innerHTML = "TAP SCREEN<br>TO CONNECT";
             updateHUD();
         }
 
@@ -205,87 +265,62 @@
 
         function setupLevel(lvl) {
             state.level = lvl;
-            // Requirement C: Pairs of levels.
-            // Pair 1 (Lvl 1, 2): Difficulty 1. 
-            // Pair 2 (Lvl 3, 4): Difficulty 2.
-            // Formula: Difficulty increases every Odd level (2n+1).
             
-            // Difficulty Base
-            const difficultyStep = Math.ceil(lvl / 2); 
-            
-            // Set Physics
-            path.speed = 3 + (difficultyStep * 0.5); // Increase speed slightly
-            path.currentWidth = Math.max(60, 200 - (difficultyStep * 20)); // Narrower tunnel
-            
-            // Set Inversion (Even levels are inverted)
+            // Difficulty Logic (2n+1 switch)
+            // Even levels (2, 4, 6) are Inverted
             state.inverted = (lvl % 2 === 0);
-
-            // Reset Metrics for new level
-            metrics.stabilityTimer = 0;
-            metrics.errors = [];
-            state.adaptation = 0;
-
-            updateHUD();
             
-            // Visual Flash
-            const flashColor = state.inverted ? 'rgba(255, 50, 50, 0.5)' : 'rgba(50, 255, 255, 0.5)';
+            // Difficulty Step increases every 2 levels (1-2=Easy, 3-4=Med, etc)
+            const difficultyStep = Math.ceil(lvl / 2);
+
+            // Narrower path
+            const widthRatio = Math.max(0.2, 0.5 - (difficultyStep * 0.05));
+            path.currentWidth = canvas.width * widthRatio;
+            
+            // Faster scroll
+            path.speed = 4 + (difficultyStep * 0.5); 
+
+            // Reset Metrics
+            metrics.stabilityTimer = 0;
+            state.adaptation = 0;
+            updateHUD();
+
+            // Flash effect
+            const flashColor = state.inverted ? '#500' : '#055';
             ctx.fillStyle = flashColor;
             ctx.fillRect(0,0,canvas.width, canvas.height);
         }
 
-        // --- The "Meticulous" Calculation (Objective B) ---
+        // Objective B: The Calculation
         function calculatePlasticity() {
-            // 1. Find the path segment directly under the player
-            // Player Y is fixed at 600.
-            // Map 600 to segment index.
-            // Segments move down, so we look at index based on Y.
-            // Actually, we render from bottom up or top down? Let's look at updatePath.
-            // Simplified: The segment at player.y.
-            
-            // We'll iterate segments to find the one at player.y
-            // But since they are uniform height, we can estimate.
-            // However, easiest way: The segment at index ~ (player.y / height) isn't static because array shifts.
-            // Let's just find the segment in the array that corresponds to Y=600.
-            const playerSegIndex = Math.floor(player.y / path.segmentHeight); 
-            // Note: Since we unshift/pop, the array indices map to screen Y. 
-            // Let's say index 0 is at -height, and index N is at Height.
-            // We will simplify: The logic updates segments, index 0 is top of screen.
-            // player.y is 600. segmentHeight is 5. Index = 120.
-            
-            const currentSeg = path.segments[120]; 
+            // Find segment closest to player Y
+            // Since we push to index 0, index changes. 
+            // We approximate by iterating or just checking index 0 is top, last is bottom.
+            // But we unshift new segments to Top. So Index 0 is Y=0.
+            const playerIndex = Math.floor(player.y / path.segmentHeight);
+            const currentSeg = path.segments[playerIndex];
 
             if(!currentSeg) return;
 
-            // 2. Calculate Deviation
             const center = currentSeg.x;
             const deviation = Math.abs(player.x - center);
-            const normalizedError = deviation / (currentSeg.w / 2); // 0 = center, 1 = edge
+            const normalizedError = deviation / (currentSeg.w / 2); 
 
-            // 3. Add to rolling history
             metrics.errors.push(normalizedError);
             if(metrics.errors.length > metrics.historySize) metrics.errors.shift();
 
-            // 4. Calculate Variance/Stability
-            // We want low error average AND low jitter.
             const sum = metrics.errors.reduce((a, b) => a + b, 0);
             const avg = sum / metrics.errors.length;
 
-            // Thresholds:
-            // To prove "Learning", the player must be reasonably centered (avg < 0.4)
-            // And consistent.
-            
-            if (metrics.errors.length === metrics.historySize && avg < 0.4) {
-                // We are in the "Zone"
+            // Mobile Tolerance: 0.55 avg error allowed (keyboard was 0.4)
+            if (metrics.errors.length === metrics.historySize && avg < 0.55) {
                 metrics.stabilityTimer++;
             } else {
-                // Lost focus
-                if(metrics.stabilityTimer > 0) metrics.stabilityTimer -= 2; // Decay
+                if(metrics.stabilityTimer > 0) metrics.stabilityTimer -= 2; 
                 if(metrics.stabilityTimer < 0) metrics.stabilityTimer = 0;
             }
 
-            // 5. Update Adaptation Meter
-            // Max timer depends on difficulty. Harder levels require longer proof of mastery.
-            const targetTime = metrics.requiredStabilityTime + (state.level * 30);
+            const targetTime = metrics.requiredStabilityTime + (state.level * 60);
             state.adaptation = Math.min(100, (metrics.stabilityTimer / targetTime) * 100);
 
             if(state.adaptation >= 100) {
@@ -296,143 +331,129 @@
         function levelUp() {
             state.level++;
             setupLevel(state.level);
-            // Reward
-            state.score += 1000;
+            state.score += 500;
         }
-
-        // --- Game Loop ---
 
         function update() {
             if(state.gameOver) return;
-            state.frames++;
 
-            // 1. Player Movement
+            // 1. Movement
             let move = 0;
-            if(keys.ArrowLeft) move = -player.speed;
-            if(keys.ArrowRight) move = player.speed;
+            if(inputs.left) move = -player.speed;
+            if(inputs.right) move = player.speed;
 
-            // Apply Inversion
-            if(state.inverted) move = -move;
+            if(state.inverted) move = -move; // Objective C: Reversal
 
             player.x += move;
 
-            // 2. Update Path
-            // Scroll existing segments down? No, we add to top, remove bottom? 
-            // Usually simpler to shift array: Add new at index 0 (top), remove last (bottom).
+            // 2. Path Generation
+            path.noiseOffset += 0.05 * (1 + (state.level * 0.05));
+            const wave = Math.sin(path.noiseOffset) * (canvas.width * 0.35); 
+            let centerX = (canvas.width / 2) + wave;
+
+            // Keep path somewhat on screen
+            const limit = path.currentWidth/2 + 10;
+            if(centerX < limit) centerX = limit;
+            if(centerX > canvas.width - limit) centerX = canvas.width - limit;
+
+            // Add new segment at top (y=0)
+            path.segments.unshift({ x: centerX, w: path.currentWidth });
             
-            // Noise generation for winding path
-            path.noiseOffset += 0.05 * (1 + (state.level * 0.1));
-            const wave = Math.sin(path.noiseOffset) * (canvas.width * 0.35); // Winding amount
-            const centerX = (canvas.width / 2) + wave;
-
-            // Smooth Clamp
-            let newX = centerX;
-            if(newX < path.currentWidth/2) newX = path.currentWidth/2;
-            if(newX > canvas.width - path.currentWidth/2) newX = canvas.width - path.currentWidth/2;
-
-            path.segments.unshift({ x: newX, w: path.currentWidth });
-            if(path.segments.length > (canvas.height / path.segmentHeight) + 20) {
+            // Remove old from bottom
+            if(path.segments.length * path.segmentHeight > canvas.height + 50) {
                 path.segments.pop();
             }
 
-            // 3. Collision Detection
-            // Get segment at player Y
-            const playerSeg = path.segments[Math.floor(player.y / path.segmentHeight)];
-            if(playerSeg) {
-                const leftWall = playerSeg.x - (playerSeg.w / 2);
-                const rightWall = playerSeg.x + (playerSeg.w / 2);
-
-                // Collision
-                if (player.x - player.radius < leftWall || player.x + player.radius > rightWall) {
+            // 3. Collision
+            const playerIndex = Math.floor(player.y / path.segmentHeight);
+            const seg = path.segments[playerIndex];
+            
+            if(seg) {
+                const halfW = seg.w / 2;
+                if (player.x - player.radius < seg.x - halfW || 
+                    player.x + player.radius > seg.x + halfW) {
                     gameOver();
                 }
             }
 
-            // 4. Logic Updates
+            // 4. Update Stats
             state.score++;
             calculatePlasticity();
             updateHUD();
         }
 
         function draw() {
-            // Clear
-            ctx.fillStyle = '#000';
+            // Background
+            ctx.fillStyle = '#111';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Draw Path
+            // Draw Tunnel
             ctx.beginPath();
             
-            // We draw filled polygons connecting the segments
-            // Left Wall
-            ctx.fillStyle = state.inverted ? '#331111' : '#112233'; // Red tint if inverted
+            // Left Bank
+            ctx.fillStyle = state.inverted ? '#422' : '#223';
             ctx.moveTo(0, 0);
-            
-            // Iterate segments to draw left bank
             for(let i=0; i<path.segments.length; i++) {
                 const s = path.segments[i];
-                const py = i * path.segmentHeight;
-                const lx = s.x - (s.w / 2);
-                ctx.lineTo(lx, py);
+                ctx.lineTo(s.x - (s.w/2), i * path.segmentHeight);
             }
             ctx.lineTo(0, canvas.height);
             ctx.fill();
 
-            // Right Wall
+            // Right Bank
             ctx.beginPath();
             ctx.moveTo(canvas.width, 0);
             for(let i=0; i<path.segments.length; i++) {
                 const s = path.segments[i];
-                const py = i * path.segmentHeight;
-                const rx = s.x + (s.w / 2);
-                ctx.lineTo(rx, py);
+                ctx.lineTo(s.x + (s.w/2), i * path.segmentHeight);
             }
             ctx.lineTo(canvas.width, canvas.height);
             ctx.fill();
 
-            // Draw Center Line (Visual Guide)
-            ctx.strokeStyle = state.inverted ? '#550000' : '#003344';
+            // Center Line
+            ctx.strokeStyle = '#333';
             ctx.beginPath();
             for(let i=0; i<path.segments.length; i++) {
-                const s = path.segments[i];
-                const py = i * path.segmentHeight;
-                if(i===0) ctx.moveTo(s.x, py);
-                else ctx.lineTo(s.x, py);
+                // Optimization: Draw every 2nd segment line to save CPU
+                if(i%2===0) {
+                    const s = path.segments[i];
+                    ctx.lineTo(s.x, i * path.segmentHeight);
+                }
             }
             ctx.stroke();
 
-            // Draw Player
-            ctx.fillStyle = state.inverted ? '#ffaa00' : '#00ffff';
-            ctx.shadowBlur = 15;
-            ctx.shadowColor = ctx.fillStyle;
+            // Player
+            ctx.fillStyle = state.inverted ? '#f80' : '#0ff';
             ctx.beginPath();
             ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
             ctx.fill();
-            ctx.shadowBlur = 0;
 
-            // Draw "Learning Zone" indicators
-            // If learning is high, make player glow white
-            if(state.adaptation > 80) {
-                ctx.strokeStyle = '#fff';
+            // Adaptation Glow (Feedback)
+            if(state.adaptation > 50) {
+                ctx.strokeStyle = `rgba(255,255,255,${(state.adaptation-50)/50})`;
                 ctx.lineWidth = 2;
                 ctx.stroke();
             }
         }
 
         function updateHUD() {
-            elScore.innerText = state.score;
-            elLevel.innerText = state.level;
-            elInvert.style.display = state.inverted ? "block" : "none";
-            elBar.style.width = state.adaptation + "%";
-            
-            // Color bar based on progress
-            if(state.adaptation > 90) elBar.style.background = "#00ff00";
-            else elBar.style.background = "linear-gradient(90deg, #00d2ff, #3a7bd5)";
+            // Optimization: Update text only every 5 frames to save DOM reflows
+            if(state.frames % 5 === 0) {
+                elScore.innerText = state.score;
+                elLevel.innerText = state.level;
+                elInvert.style.display = state.inverted ? "block" : "none";
+                elBar.style.width = state.adaptation + "%";
+                
+                if(state.adaptation > 90) elBar.style.background = "#0f0";
+                else elBar.style.background = "linear-gradient(90deg, #00d2ff, #3a7bd5)";
+            }
+            state.frames++;
         }
 
         function gameOver() {
             state.gameOver = true;
             state.running = false;
-            elMsg.innerHTML = `NEURAL LINK BROKEN<br><span style="font-size:16px">Level Reached: ${state.level}</span><br><br>Press SPACE to Retry`;
+            elMsg.innerHTML = `NEURAL LINK BROKEN<br>LVL: ${state.level}<br><br>TAP TO RETRY`;
             elMsg.style.display = "block";
         }
 
@@ -444,9 +465,8 @@
             }
         }
 
-        // Initialize
         init();
 
     </script>
 </body>
-</html>
+    </html>
