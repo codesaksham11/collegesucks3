@@ -2,414 +2,451 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Neuro Drift</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neuro-Drift: Plasticity Trainer</title>
     <style>
         body {
             margin: 0;
-            overflow: hidden;
-            background-color: #000;
+            background-color: #111;
+            color: #eee;
             font-family: 'Courier New', Courier, monospace;
-            touch-action: none;
-            user-select: none;
-            -webkit-user-select: none;
-        }
-        canvas { display: block; }
-
-        /* HUD */
-        #hud {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            pointer-events: none;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            padding: 20px;
-            box-sizing: border-box;
-        }
-        
-        #mode-indicator {
-            text-align: center;
-            font-size: 24px;
-            font-weight: bold;
-            padding: 10px;
-            background: rgba(0,0,0,0.5);
-            border-radius: 8px;
-            transition: color 0.2s;
-        }
-        
-        #timer-bar-box {
-            width: 100%;
-            height: 6px;
-            background: #333;
-            margin-top: 10px;
-            position: relative;
-        }
-        #timer-bar {
-            width: 100%;
-            height: 100%;
-            background: #fff;
-            transform-origin: left;
-        }
-
-        #score-box {
-            font-size: 30px;
-            color: #fff;
-            text-align: right;
-        }
-
-        #controls {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            display: flex;
-            z-index: 10;
-        }
-        .touch-zone { width: 50%; height: 100%; }
-
-        /* Menus */
-        #menu, #game-over {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.95);
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            z-index: 20;
+            height: 100vh;
+            overflow: hidden;
         }
-        .hidden { display: none !important; }
-        
-        h1 { color: #fff; font-size: 40px; margin-bottom: 5px; text-transform: uppercase; }
-        h2 { color: #888; font-size: 16px; margin-bottom: 30px; font-weight: normal; }
-        
-        .btn {
-            background: #fff;
-            color: #000;
-            padding: 15px 40px;
-            font-size: 20px;
+        canvas {
+            border: 2px solid #444;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.1);
+            background-color: #000;
+        }
+        #ui-layer {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            pointer-events: none;
+            width: 600px;
+        }
+        h1 { margin: 0; font-size: 18px; color: #888; }
+        .hud-row { display: flex; justify-content: space-between; margin-top: 10px; font-weight: bold;}
+        .stat { background: rgba(0,0,0,0.7); padding: 5px 10px; border-radius: 4px; border: 1px solid #333; }
+        .inverted-warning {
+            color: #ff3333;
             font-weight: bold;
-            cursor: pointer;
-            border: none;
+            display: none;
+            animation: blink 1s infinite;
         }
-        .btn:active { background: #888; }
-        
-        /* Glitch Effect CSS */
-        .glitch-anim {
-            animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+        #learning-bar-container {
+            width: 100%;
+            height: 10px;
+            background: #333;
+            margin-top: 10px;
+            border-radius: 5px;
+            overflow: hidden;
+            border: 1px solid #555;
         }
-        @keyframes shake {
-            10%, 90% { transform: translate3d(-1px, 0, 0); }
-            20%, 80% { transform: translate3d(2px, 0, 0); }
-            30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
-            40%, 60% { transform: translate3d(4px, 0, 0); }
+        #learning-bar {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, #00d2ff, #3a7bd5);
+            transition: width 0.2s;
+        }
+        @keyframes blink { 50% { opacity: 0; } }
+        #message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            background: rgba(0,0,0,0.9);
+            padding: 20px;
+            border: 1px solid #fff;
+            display: none;
+            text-align: center;
         }
     </style>
 </head>
 <body>
 
-    <div id="hud">
-        <div id="top-panel">
-            <div id="mode-indicator">SYSTEM NORMAL</div>
-            <div id="timer-bar-box"><div id="timer-bar"></div></div>
+    <div id="ui-layer">
+        <h1>NEURO-DRIFT</h1>
+        <div class="hud-row">
+            <div class="stat">LVL: <span id="lvl-display">1</span></div>
+            <div class="stat inverted-warning" id="invert-display">⚠ CONTROLS REVERSED ⚠</div>
+            <div class="stat">SCORE: <span id="score-display">0</span></div>
         </div>
-        <div id="score-box">0</div>
+        <div style="margin-top:5px; font-size: 12px; color: #aaa;">NEURAL ADAPTATION (Pattern Learning)</div>
+        <div id="learning-bar-container">
+            <div id="learning-bar"></div>
+        </div>
     </div>
 
-    <div id="controls">
-        <div id="left-zone" class="touch-zone"></div>
-        <div id="right-zone" class="touch-zone"></div>
-    </div>
+    <canvas id="gameCanvas" width="600" height="800"></canvas>
+    <div id="message">Press Space to Start</div>
 
-    <div id="menu">
-        <h1>NEURO DRIFT</h1>
-        <h2>BRAIN REWIRING PROTOCOL</h2>
-        <p style="color:#aaa; text-align:center; max-width:80%">Tap Left/Right to steer.<br>Watch the timer.<br>When it hits zero, controls FLIP.</p>
-        <div class="btn" onclick="startGame()">INITIATE</div>
-    </div>
+    <script>
+        /**
+         * NEURO-DRIFT ENGINE
+         * 
+         * Logic:
+         * 1. Generates a procedural tunnel.
+         * 2. Measures "Adaptation" by calculating the Variance of Error (Player Position vs Center).
+         * 3. Low variance over time = Brain has learned the pattern.
+         * 4. Triggers level up.
+         */
 
-    <div id="game-over" class="hidden">
-        <h1 style="color:#f00">SYNC LOST</h1>
-        <p id="final-score" style="color:#fff; font-size: 20px; margin-bottom: 20px;">Score: 0</p>
-        <div class="btn" onclick="startGame()">RETRY</div>
-    </div>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
 
-    <canvas id="gameCanvas"></canvas>
+        // Game State
+        const state = {
+            running: false,
+            gameOver: false,
+            score: 0,
+            level: 1,
+            adaptation: 0, // 0 to 100
+            inverted: false,
+            frames: 0
+        };
 
-<script>
-    const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
+        // Player Configuration
+        const player = {
+            x: 300,
+            y: 600,
+            radius: 8,
+            speed: 5,
+            dx: 0
+        };
 
-    // --- CONFIG ---
-    let width, height;
-    let gameRunning = false;
-    let score = 0;
-    
-    // Player
-    let playerX = 0; // -1 to 1 (screen center relative)
-    let playerSpeed = 0.035; // Lateral speed
-    let health = 100;
-    
-    // Road Math
-    let roadPoints = []; // Stores the curve data
-    let totalTime = 0;
-    let speed = 5; // Forward speed illusion
-    
-    // The "Neuro" Mechanic
-    let isInverted = false;
-    let switchTimer = 0;
-    const SWITCH_INTERVAL = 600; // Frames (approx 10 sec)
-    
-    // Inputs
-    let holdLeft = false;
-    let holdRight = false;
+        // Path Configuration
+        const path = {
+            segments: [],
+            segmentHeight: 5,
+            baseWidth: 200,
+            currentWidth: 200,
+            noiseOffset: 0,
+            speed: 3
+        };
 
-    // Colors
-    const COLOR_NORMAL = '#00aaff'; // Blue
-    const COLOR_INVERT = '#ffaa00'; // Orange
-    const COLOR_BG_NORMAL = '#001122';
-    const COLOR_BG_INVERT = '#221100';
+        // Neural Calculation metrics
+        const metrics = {
+            errors: [], // Rolling buffer of distance from center
+            historySize: 60, // 1 second at 60fps
+            stabilityTimer: 0,
+            requiredStabilityTime: 300 // Frames required (5 seconds) of stable play to pass
+        };
 
-    // --- SETUP ---
-    function resize() {
-        width = window.innerWidth;
-        height = window.innerHeight;
-        canvas.width = width;
-        canvas.height = height;
-    }
-    window.addEventListener('resize', resize);
-    resize();
+        // Inputs
+        const keys = {
+            ArrowLeft: false,
+            ArrowRight: false
+        };
 
-    // Input Handling
-    const lZone = document.getElementById('left-zone');
-    const rZone = document.getElementById('right-zone');
+        // DOM Elements
+        const elLevel = document.getElementById('lvl-display');
+        const elScore = document.getElementById('score-display');
+        const elInvert = document.getElementById('invert-display');
+        const elBar = document.getElementById('learning-bar');
+        const elMsg = document.getElementById('message');
 
-    function inputStart(side, e) {
-        if(e) e.preventDefault();
-        if(side === 'left') holdLeft = true;
-        if(side === 'right') holdRight = true;
-    }
-    function inputEnd(side, e) {
-        if(e) e.preventDefault();
-        if(side === 'left') holdLeft = false;
-        if(side === 'right') holdRight = false;
-    }
+        // --- Core Logic ---
 
-    lZone.addEventListener('touchstart', e => inputStart('left', e));
-    lZone.addEventListener('touchend', e => inputEnd('left', e));
-    rZone.addEventListener('touchstart', e => inputStart('right', e));
-    rZone.addEventListener('touchend', e => inputEnd('right', e));
+        function init() {
+            window.addEventListener('keydown', e => {
+                if(keys.hasOwnProperty(e.code)) keys[e.code] = true;
+                if(e.code === 'Space') {
+                    if(!state.running) startGame();
+                    else if(state.gameOver) resetGame();
+                }
+            });
+            window.addEventListener('keyup', e => {
+                if(keys.hasOwnProperty(e.code)) keys[e.code] = false;
+            });
 
-    // Mouse for PC
-    lZone.addEventListener('mousedown', () => inputStart('left'));
-    lZone.addEventListener('mouseup', () => inputEnd('left'));
-    lZone.addEventListener('mouseleave', () => inputEnd('left'));
-    rZone.addEventListener('mousedown', () => inputStart('right'));
-    rZone.addEventListener('mouseup', () => inputEnd('right'));
-    rZone.addEventListener('mouseleave', () => inputEnd('right'));
-
-    // --- GAME LOOP ---
-
-    function startGame() {
-        gameRunning = true;
-        score = 0;
-        health = 100;
-        playerX = 0;
-        totalTime = 0;
-        
-        isInverted = false;
-        switchTimer = SWITCH_INTERVAL;
-        
-        // Reset Road
-        roadPoints = [];
-        for(let i=0; i<height; i+=5) {
-            roadPoints.push({y: i, curve: 0});
+            resetGame();
+            draw(); // Draw initial static frame
         }
 
-        document.getElementById('menu').classList.add('hidden');
-        document.getElementById('game-over').classList.add('hidden');
-        updateModeUI();
-        
-        requestAnimationFrame(loop);
-    }
-
-    function switchMode() {
-        isInverted = !isInverted;
-        switchTimer = SWITCH_INTERVAL;
-        
-        // Visual Feedback
-        const hud = document.getElementById('hud');
-        hud.classList.remove('glitch-anim');
-        void hud.offsetWidth; // Trigger reflow
-        hud.classList.add('glitch-anim');
-        
-        updateModeUI();
-    }
-
-    function updateModeUI() {
-        const ind = document.getElementById('mode-indicator');
-        const body = document.body;
-        
-        if(isInverted) {
-            ind.innerText = "⚠ CONTROLS INVERTED ⚠";
-            ind.style.color = COLOR_INVERT;
-            ind.style.borderColor = COLOR_INVERT;
-            ind.style.border = "2px solid " + COLOR_INVERT;
-            // body.style.backgroundColor = COLOR_BG_INVERT;
-        } else {
-            ind.innerText = "SYSTEM NORMAL";
-            ind.style.color = COLOR_NORMAL;
-            ind.style.borderColor = COLOR_NORMAL;
-            ind.style.border = "2px solid " + COLOR_NORMAL;
-            // body.style.backgroundColor = COLOR_BG_NORMAL;
-        }
-    }
-
-    function update() {
-        if(!gameRunning) return;
-
-        // 1. Timer Logic
-        switchTimer--;
-        let pct = (switchTimer / SWITCH_INTERVAL) * 100;
-        document.getElementById('timer-bar').style.width = pct + "%";
-        
-        if(switchTimer <= 0) {
-            switchMode();
-        }
-
-        // 2. Road Generation (Procedural Curve)
-        totalTime += 0.05;
-        // Complex curve using sum of sines for unpredictability
-        let currentCurve = Math.sin(totalTime) * 0.5 + Math.sin(totalTime * 0.3) * 0.5; 
-        
-        // Shift road points down (simulation of speed)
-        // We actually just shift the curve value
-        roadPoints.shift(); // Remove bottom
-        roadPoints.push({y: 0, curve: currentCurve}); // Add new at top (conceptually far away)
-
-        // 3. Player Movement
-        let move = 0;
-        if(holdLeft) move -= playerSpeed;
-        if(holdRight) move += playerSpeed;
-
-        if(isInverted) move *= -1; // THE REWIRE MECHANIC
-
-        playerX += move;
-
-        // 4. Calculate Road Position at Player Y (Near bottom of screen)
-        // We look at the "oldest" points which are now at the bottom of screen
-        let roadCenter = roadPoints[0].curve; 
-        
-        // 5. Collision / Bounds
-        let roadWidth = 0.6; // 60% of screen
-        // playerX is -1 to 1. roadCenter is approx -1 to 1.
-        
-        let diff = Math.abs(playerX - roadCenter);
-        let limit = roadWidth / 2;
-        
-        if(diff > limit) {
-            // OFF ROAD
-            health -= 2;
-            // Shake screen
-            ctx.save();
-            ctx.translate((Math.random()-0.5)*10, (Math.random()-0.5)*10);
-        } else {
-            // ON ROAD
-            score++;
-            if(health < 100) health += 0.2; // Regen
-        }
-
-        if(health <= 0) {
-            gameRunning = false;
-            document.getElementById('final-score').innerText = "Distance: " + score;
-            document.getElementById('game-over').classList.remove('hidden');
-        }
-
-        document.getElementById('score-box').innerText = score;
-        
-        // Difficulty scaling
-        if(score % 1000 === 0) {
-            speed += 0.5;
-        }
-    }
-
-    function draw() {
-        // Draw Background
-        ctx.fillStyle = isInverted ? COLOR_BG_INVERT : COLOR_BG_NORMAL;
-        ctx.fillRect(0, 0, width, height);
-        
-        if(gameRunning && health < 100 && diff > limit) ctx.restore(); // Restore from shake
-
-        let roadColor = isInverted ? COLOR_INVERT : COLOR_NORMAL;
-        
-        // Draw Road (Pseudo-3D effect)
-        // We iterate from top (horizon) to bottom (player)
-        // But our array is shifted so index 0 is bottom.
-        // Let's draw strips.
-        
-        let centerX = width / 2;
-        
-        for(let i=0; i < roadPoints.length; i++) {
-            // Perspective transform
-            // i=0 is bottom (near), i=max is top (far)
-            let p = roadPoints[i];
+        function resetGame() {
+            state.running = false;
+            state.gameOver = false;
+            state.score = 0;
+            state.level = 1;
+            state.inverted = false;
+            state.adaptation = 0;
             
-            // Map index to Y position
-            // We want index roadPoints.length-1 to be at y=0 (horizon)
-            // and index 0 to be at y=height
-            
-            let perspective = 1 - (i / roadPoints.length); // 1 at bottom, 0 at top
-            let drawY = height - (i * (height/roadPoints.length));
-            
-            // Width gets smaller as we go up
-            let rectW = (width * 0.6) * perspective; 
-            let curveOffset = p.curve * (width/2); 
-            
-            let drawX = centerX + curveOffset - (rectW/2);
-            
-            // Draw segment
-            ctx.fillStyle = (Math.floor(i/5) % 2 === 0) ? roadColor : 'rgba(0,0,0,0)'; // Striped road
-            ctx.globalAlpha = 0.3 + (perspective * 0.7); // Fade into distance
-            ctx.fillRect(drawX, drawY, rectW, (height/roadPoints.length) + 1);
+            // Reset Path
+            path.currentWidth = 200;
+            path.speed = 3;
+            path.segments = [];
+            for(let i=0; i < canvas.height / path.segmentHeight + 10; i++) {
+                path.segments.push({
+                    x: canvas.width/2,
+                    w: path.currentWidth
+                });
+            }
+
+            player.x = canvas.width / 2;
+            elMsg.style.display = "block";
+            elMsg.innerText = "Press SPACE to Initialize Neural Link";
+            updateHUD();
         }
-        ctx.globalAlpha = 1;
 
-        // Draw Player
-        // Player is fixed at bottom center visually, but moves relative to road center
-        let playerScreenX = centerX + (playerX * (width/2));
-        let playerScreenY = height - 100;
-
-        ctx.fillStyle = '#fff';
-        ctx.shadowBlur = 20;
-        ctx.shadowColor = roadColor;
-        
-        // Triangle shape
-        ctx.beginPath();
-        ctx.moveTo(playerScreenX, playerScreenY);
-        ctx.lineTo(playerScreenX - 15, playerScreenY + 30);
-        ctx.lineTo(playerScreenX + 15, playerScreenY + 30);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-
-        // Draw Health Bar (Vertical on side)
-        ctx.fillStyle = '#333';
-        ctx.fillRect(width - 20, height/2 - 100, 10, 200);
-        
-        let hpColor = '#0f0';
-        if(health < 50) hpColor = '#ff0';
-        if(health < 20) hpColor = '#f00';
-        
-        ctx.fillStyle = hpColor;
-        let hVal = (health / 100) * 200;
-        ctx.fillRect(width - 20, height/2 + 100 - hVal, 10, hVal);
-    }
-
-    function loop() {
-        if(gameRunning) {
-            update();
-            draw();
-            requestAnimationFrame(loop);
+        function startGame() {
+            state.running = true;
+            state.gameOver = false;
+            elMsg.style.display = "none";
+            loop();
         }
-    }
-</script>
+
+        function setupLevel(lvl) {
+            state.level = lvl;
+            // Requirement C: Pairs of levels.
+            // Pair 1 (Lvl 1, 2): Difficulty 1. 
+            // Pair 2 (Lvl 3, 4): Difficulty 2.
+            // Formula: Difficulty increases every Odd level (2n+1).
+            
+            // Difficulty Base
+            const difficultyStep = Math.ceil(lvl / 2); 
+            
+            // Set Physics
+            path.speed = 3 + (difficultyStep * 0.5); // Increase speed slightly
+            path.currentWidth = Math.max(60, 200 - (difficultyStep * 20)); // Narrower tunnel
+            
+            // Set Inversion (Even levels are inverted)
+            state.inverted = (lvl % 2 === 0);
+
+            // Reset Metrics for new level
+            metrics.stabilityTimer = 0;
+            metrics.errors = [];
+            state.adaptation = 0;
+
+            updateHUD();
+            
+            // Visual Flash
+            const flashColor = state.inverted ? 'rgba(255, 50, 50, 0.5)' : 'rgba(50, 255, 255, 0.5)';
+            ctx.fillStyle = flashColor;
+            ctx.fillRect(0,0,canvas.width, canvas.height);
+        }
+
+        // --- The "Meticulous" Calculation (Objective B) ---
+        function calculatePlasticity() {
+            // 1. Find the path segment directly under the player
+            // Player Y is fixed at 600.
+            // Map 600 to segment index.
+            // Segments move down, so we look at index based on Y.
+            // Actually, we render from bottom up or top down? Let's look at updatePath.
+            // Simplified: The segment at player.y.
+            
+            // We'll iterate segments to find the one at player.y
+            // But since they are uniform height, we can estimate.
+            // However, easiest way: The segment at index ~ (player.y / height) isn't static because array shifts.
+            // Let's just find the segment in the array that corresponds to Y=600.
+            const playerSegIndex = Math.floor(player.y / path.segmentHeight); 
+            // Note: Since we unshift/pop, the array indices map to screen Y. 
+            // Let's say index 0 is at -height, and index N is at Height.
+            // We will simplify: The logic updates segments, index 0 is top of screen.
+            // player.y is 600. segmentHeight is 5. Index = 120.
+            
+            const currentSeg = path.segments[120]; 
+
+            if(!currentSeg) return;
+
+            // 2. Calculate Deviation
+            const center = currentSeg.x;
+            const deviation = Math.abs(player.x - center);
+            const normalizedError = deviation / (currentSeg.w / 2); // 0 = center, 1 = edge
+
+            // 3. Add to rolling history
+            metrics.errors.push(normalizedError);
+            if(metrics.errors.length > metrics.historySize) metrics.errors.shift();
+
+            // 4. Calculate Variance/Stability
+            // We want low error average AND low jitter.
+            const sum = metrics.errors.reduce((a, b) => a + b, 0);
+            const avg = sum / metrics.errors.length;
+
+            // Thresholds:
+            // To prove "Learning", the player must be reasonably centered (avg < 0.4)
+            // And consistent.
+            
+            if (metrics.errors.length === metrics.historySize && avg < 0.4) {
+                // We are in the "Zone"
+                metrics.stabilityTimer++;
+            } else {
+                // Lost focus
+                if(metrics.stabilityTimer > 0) metrics.stabilityTimer -= 2; // Decay
+                if(metrics.stabilityTimer < 0) metrics.stabilityTimer = 0;
+            }
+
+            // 5. Update Adaptation Meter
+            // Max timer depends on difficulty. Harder levels require longer proof of mastery.
+            const targetTime = metrics.requiredStabilityTime + (state.level * 30);
+            state.adaptation = Math.min(100, (metrics.stabilityTimer / targetTime) * 100);
+
+            if(state.adaptation >= 100) {
+                levelUp();
+            }
+        }
+
+        function levelUp() {
+            state.level++;
+            setupLevel(state.level);
+            // Reward
+            state.score += 1000;
+        }
+
+        // --- Game Loop ---
+
+        function update() {
+            if(state.gameOver) return;
+            state.frames++;
+
+            // 1. Player Movement
+            let move = 0;
+            if(keys.ArrowLeft) move = -player.speed;
+            if(keys.ArrowRight) move = player.speed;
+
+            // Apply Inversion
+            if(state.inverted) move = -move;
+
+            player.x += move;
+
+            // 2. Update Path
+            // Scroll existing segments down? No, we add to top, remove bottom? 
+            // Usually simpler to shift array: Add new at index 0 (top), remove last (bottom).
+            
+            // Noise generation for winding path
+            path.noiseOffset += 0.05 * (1 + (state.level * 0.1));
+            const wave = Math.sin(path.noiseOffset) * (canvas.width * 0.35); // Winding amount
+            const centerX = (canvas.width / 2) + wave;
+
+            // Smooth Clamp
+            let newX = centerX;
+            if(newX < path.currentWidth/2) newX = path.currentWidth/2;
+            if(newX > canvas.width - path.currentWidth/2) newX = canvas.width - path.currentWidth/2;
+
+            path.segments.unshift({ x: newX, w: path.currentWidth });
+            if(path.segments.length > (canvas.height / path.segmentHeight) + 20) {
+                path.segments.pop();
+            }
+
+            // 3. Collision Detection
+            // Get segment at player Y
+            const playerSeg = path.segments[Math.floor(player.y / path.segmentHeight)];
+            if(playerSeg) {
+                const leftWall = playerSeg.x - (playerSeg.w / 2);
+                const rightWall = playerSeg.x + (playerSeg.w / 2);
+
+                // Collision
+                if (player.x - player.radius < leftWall || player.x + player.radius > rightWall) {
+                    gameOver();
+                }
+            }
+
+            // 4. Logic Updates
+            state.score++;
+            calculatePlasticity();
+            updateHUD();
+        }
+
+        function draw() {
+            // Clear
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw Path
+            ctx.beginPath();
+            
+            // We draw filled polygons connecting the segments
+            // Left Wall
+            ctx.fillStyle = state.inverted ? '#331111' : '#112233'; // Red tint if inverted
+            ctx.moveTo(0, 0);
+            
+            // Iterate segments to draw left bank
+            for(let i=0; i<path.segments.length; i++) {
+                const s = path.segments[i];
+                const py = i * path.segmentHeight;
+                const lx = s.x - (s.w / 2);
+                ctx.lineTo(lx, py);
+            }
+            ctx.lineTo(0, canvas.height);
+            ctx.fill();
+
+            // Right Wall
+            ctx.beginPath();
+            ctx.moveTo(canvas.width, 0);
+            for(let i=0; i<path.segments.length; i++) {
+                const s = path.segments[i];
+                const py = i * path.segmentHeight;
+                const rx = s.x + (s.w / 2);
+                ctx.lineTo(rx, py);
+            }
+            ctx.lineTo(canvas.width, canvas.height);
+            ctx.fill();
+
+            // Draw Center Line (Visual Guide)
+            ctx.strokeStyle = state.inverted ? '#550000' : '#003344';
+            ctx.beginPath();
+            for(let i=0; i<path.segments.length; i++) {
+                const s = path.segments[i];
+                const py = i * path.segmentHeight;
+                if(i===0) ctx.moveTo(s.x, py);
+                else ctx.lineTo(s.x, py);
+            }
+            ctx.stroke();
+
+            // Draw Player
+            ctx.fillStyle = state.inverted ? '#ffaa00' : '#00ffff';
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = ctx.fillStyle;
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            // Draw "Learning Zone" indicators
+            // If learning is high, make player glow white
+            if(state.adaptation > 80) {
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+        }
+
+        function updateHUD() {
+            elScore.innerText = state.score;
+            elLevel.innerText = state.level;
+            elInvert.style.display = state.inverted ? "block" : "none";
+            elBar.style.width = state.adaptation + "%";
+            
+            // Color bar based on progress
+            if(state.adaptation > 90) elBar.style.background = "#00ff00";
+            else elBar.style.background = "linear-gradient(90deg, #00d2ff, #3a7bd5)";
+        }
+
+        function gameOver() {
+            state.gameOver = true;
+            state.running = false;
+            elMsg.innerHTML = `NEURAL LINK BROKEN<br><span style="font-size:16px">Level Reached: ${state.level}</span><br><br>Press SPACE to Retry`;
+            elMsg.style.display = "block";
+        }
+
+        function loop() {
+            if(state.running) {
+                update();
+                draw();
+                requestAnimationFrame(loop);
+            }
+        }
+
+        // Initialize
+        init();
+
+    </script>
 </body>
 </html>
