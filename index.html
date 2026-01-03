@@ -2,25 +2,21 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <!-- Vital for Mobile: Prevents zooming and sets correct scale -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Neuro-Drift Mobile</title>
+    <title>Neuro-Drift J7 Patch</title>
     <style>
         body {
             margin: 0;
             background-color: #000;
             color: #eee;
             font-family: 'Courier New', Courier, monospace;
-            overflow: hidden; /* Prevent scrolling */
-            touch-action: none; /* Disable default touch actions like pinch */
+            overflow: hidden;
+            touch-action: none;
             display: flex;
             flex-direction: column;
             align-items: center;
         }
-        canvas {
-            display: block;
-            background-color: #000;
-        }
+        canvas { display: block; background-color: #000; }
         #ui-layer {
             position: absolute;
             top: 10px;
@@ -28,80 +24,54 @@
             width: 100%;
             padding: 0 10px;
             box-sizing: border-box;
-            pointer-events: none; /* Let touches pass through to canvas */
+            pointer-events: none;
             text-align: center;
         }
         h1 { margin: 0; font-size: 16px; color: #666; letter-spacing: 2px; }
         .hud-row { 
-            display: flex; 
-            justify-content: space-between; 
-            margin-top: 5px; 
-            font-weight: bold;
-            font-size: 14px;
+            display: flex; justify-content: space-between; margin-top: 5px; 
+            font-weight: bold; font-size: 14px;
         }
         .stat { 
-            background: rgba(0,0,0,0.6); 
-            padding: 4px 8px; 
-            border-radius: 4px; 
-            border: 1px solid #333; 
+            background: rgba(0,0,0,0.6); padding: 4px 8px; 
+            border-radius: 4px; border: 1px solid #333; 
         }
         .inverted-warning {
-            color: #ff3333;
-            font-weight: bold;
-            display: none;
-            animation: blink 0.8s infinite;
-            font-size: 12px;
-            padding-top: 6px;
+            color: #ff3333; font-weight: bold; display: none;
+            animation: blink 0.8s infinite; font-size: 12px; padding-top: 6px;
         }
         #learning-bar-container {
-            width: 80%;
-            height: 6px;
-            background: #222;
-            margin: 8px auto 0;
-            border-radius: 3px;
-            overflow: hidden;
-            border: 1px solid #444;
+            width: 80%; height: 6px; background: #222; margin: 8px auto 0;
+            border-radius: 3px; overflow: hidden; border: 1px solid #444;
         }
         #learning-bar {
-            width: 0%;
-            height: 100%;
+            width: 0%; height: 100%;
             background: linear-gradient(90deg, #00d2ff, #3a7bd5);
             transition: width 0.2s;
         }
-        /* Mobile Touch Zones Visuals */
         .touch-hint {
-            position: absolute;
-            bottom: 20px;
-            width: 40%;
-            height: 50px;
-            border: 2px dashed rgba(255,255,255,0.1);
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: rgba(255,255,255,0.2);
-            font-size: 12px;
-            pointer-events: none;
+            position: absolute; bottom: 20px; width: 40%; height: 50px;
+            border: 2px dashed rgba(255,255,255,0.1); border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            color: rgba(255,255,255,0.2); font-size: 12px; pointer-events: none;
         }
         #left-hint { left: 5%; }
         #right-hint { right: 5%; }
-
         @keyframes blink { 50% { opacity: 0; } }
         
         #message {
-            position: absolute;
-            top: 40%;
-            left: 50%;
+            position: absolute; top: 40%; left: 50%;
             transform: translate(-50%, -50%);
-            font-size: 20px;
-            background: rgba(0,0,0,0.85);
-            padding: 20px;
-            border: 1px solid #fff;
-            display: none;
-            text-align: center;
-            width: 80%;
-            border-radius: 8px;
-            box-shadow: 0 0 15px #000;
+            font-size: 20px; background: rgba(0,0,0,0.9);
+            padding: 20px; border: 1px solid #fff;
+            display: none; text-align: center;
+            width: 85%; border-radius: 8px;
+            box-shadow: 0 0 15px #000; z-index: 10;
+        }
+        .btn-ready {
+            margin-top: 15px; padding: 10px 20px;
+            background: #222; border: 1px solid #fff;
+            color: #fff; display: inline-block;
         }
     </style>
 </head>
@@ -119,7 +89,6 @@
         </div>
     </div>
 
-    <!-- Touch Hints -->
     <div id="left-hint" class="touch-hint">LEFT</div>
     <div id="right-hint" class="touch-hint">RIGHT</div>
 
@@ -128,9 +97,8 @@
 
     <script>
         const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d', { alpha: false }); // Optimization: alpha false for J7
+        const ctx = canvas.getContext('2d', { alpha: false });
 
-        // Resize handling
         function resize() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
@@ -141,6 +109,7 @@
         // Game State
         const state = {
             running: false,
+            waitingForTap: false, // NEW: Specific state for level transitions
             gameOver: false,
             score: 0,
             level: 1,
@@ -149,68 +118,45 @@
             frames: 0
         };
 
-        // Player Config
-        const player = {
-            x: 0, // set in reset
-            y: 0, // set in reset
-            radius: 10, // slightly bigger for mobile visibility
-            speed: 0, // calculated based on width
-            baseSpeedMult: 0.015 // Speed is 1.5% of screen width
-        };
-
-        // Path Config
+        const player = { x: 0, y: 0, radius: 10, speed: 0, baseSpeedMult: 0.015 };
         const path = {
-            segments: [],
-            segmentHeight: 10, // Higher value = better performance on J7
-            baseWidthRatio: 0.5, // Path is 50% of screen width
-            currentWidth: 0,
-            noiseOffset: 0,
-            speed: 4 // scroll speed
+            segments: [], segmentHeight: 10, 
+            baseWidthRatio: 0.5, currentWidth: 0, 
+            noiseOffset: 0, speed: 4
         };
+        const metrics = { errors: [], historySize: 45, stabilityTimer: 0, requiredStabilityTime: 300 };
+        const inputs = { left: false, right: false };
 
-        // Neural Metrics
-        const metrics = {
-            errors: [],
-            historySize: 45, // Slightly shorter history for mobile
-            stabilityTimer: 0,
-            requiredStabilityTime: 300 
-        };
-
-        // Inputs (Touch)
-        const inputs = {
-            left: false,
-            right: false
-        };
-
-        // UI Elements
+        // UI
         const elLevel = document.getElementById('lvl-display');
         const elScore = document.getElementById('score-display');
         const elInvert = document.getElementById('invert-display');
         const elBar = document.getElementById('learning-bar');
         const elMsg = document.getElementById('message');
 
-        // --- Input Handling (Mobile Specific) ---
-        
+        // --- Touch Handling ---
         function handleTouch(e) {
-            e.preventDefault(); // Prevent browser scrolling
-            
-            // Reset inputs
+            e.preventDefault();
             inputs.left = false;
             inputs.right = false;
 
             const halfWidth = canvas.width / 2;
-
-            // Check all active touches
             for (let i = 0; i < e.touches.length; i++) {
-                const tx = e.touches[i].clientX;
-                if (tx < halfWidth) inputs.left = true;
+                if (e.touches[i].clientX < halfWidth) inputs.left = true;
                 else inputs.right = true;
             }
 
-            // Start game if touched on message
-            if (!state.running && e.type === 'touchstart') {
-                if(state.gameOver) resetGame();
-                else startGame();
+            // Logic for Tapping based on State
+            if (e.type === 'touchstart') {
+                if (state.gameOver) {
+                    resetGame(); // Restart from Lvl 1
+                } 
+                else if (state.waitingForTap) {
+                    resumeGame(); // Continue to next Level
+                }
+                else if (!state.running) {
+                    startGame(); // Initial Start
+                }
             }
         }
 
@@ -222,11 +168,15 @@
 
         function init() {
             resetGame();
-            draw(); 
+            state.running = false; // Ensure it starts paused
+            draw();
+            elMsg.style.display = "block";
+            elMsg.innerHTML = "NEURO-DRIFT<br><span style='font-size:14px; color:#aaa'>Left Hand Trainer</span><br><br>TAP TO START";
         }
 
         function resetGame() {
             state.running = false;
+            state.waitingForTap = false;
             state.gameOver = false;
             state.score = 0;
             state.level = 1;
@@ -234,72 +184,80 @@
             state.adaptation = 0;
             
             player.x = canvas.width / 2;
-            player.y = canvas.height * 0.75; // Player sits at bottom 25%
+            player.y = canvas.height * 0.75;
             player.speed = canvas.width * player.baseSpeedMult;
 
-            // Reset Path
             path.currentWidth = canvas.width * path.baseWidthRatio;
             path.segments = [];
-            // Fill screen with straight path
             for(let i=0; i < canvas.height / path.segmentHeight + 5; i++) {
-                path.segments.push({
-                    x: canvas.width/2,
-                    w: path.currentWidth
-                });
+                path.segments.push({ x: canvas.width/2, w: path.currentWidth });
             }
 
             metrics.stabilityTimer = 0;
             metrics.errors = [];
-
-            elMsg.style.display = "block";
-            elMsg.innerHTML = "TAP SCREEN<br>TO CONNECT";
             updateHUD();
         }
 
         function startGame() {
             state.running = true;
-            state.gameOver = false;
+            elMsg.style.display = "none";
+            loop();
+        }
+
+        function resumeGame() {
+            state.waitingForTap = false;
+            state.running = true;
             elMsg.style.display = "none";
             loop();
         }
 
         function setupLevel(lvl) {
             state.level = lvl;
-            
-            // Difficulty Logic (2n+1 switch)
-            // Even levels (2, 4, 6) are Inverted
             state.inverted = (lvl % 2 === 0);
             
-            // Difficulty Step increases every 2 levels (1-2=Easy, 3-4=Med, etc)
             const difficultyStep = Math.ceil(lvl / 2);
-
-            // Narrower path
             const widthRatio = Math.max(0.2, 0.5 - (difficultyStep * 0.05));
             path.currentWidth = canvas.width * widthRatio;
-            
-            // Faster scroll
             path.speed = 4 + (difficultyStep * 0.5); 
 
-            // Reset Metrics
             metrics.stabilityTimer = 0;
+            metrics.errors = []; // Clear history so we don't level up instantly again
             state.adaptation = 0;
+            
             updateHUD();
-
-            // Flash effect
-            const flashColor = state.inverted ? '#500' : '#055';
-            ctx.fillStyle = flashColor;
-            ctx.fillRect(0,0,canvas.width, canvas.height);
         }
 
-        // Objective B: The Calculation
+        function levelUp() {
+            // 1. Pause Logic
+            state.running = false; 
+            state.waitingForTap = true;
+
+            // 2. Setup Next Level Physics
+            state.level++;
+            setupLevel(state.level);
+
+            // 3. Show Interstitial Screen
+            let html = `<strong>LEVEL ${state.level}</strong><br><br>`;
+            
+            if(state.inverted) {
+                html += `<span style="color:#ff4444; font-size:18px; border:1px solid #ff4444; padding:5px;">⚠ CONTROLS REVERSED ⚠</span>`;
+                html += `<br><br><span style="font-size:14px; color:#aaa">Left is Right<br>Right is Left</span>`;
+            } else {
+                html += `<span style="color:#44ffff; font-size:18px; border:1px solid #44ffff; padding:5px;">CONTROLS NORMALIZED</span>`;
+                html += `<br><br><span style="font-size:14px; color:#aaa">Back to standard input</span>`;
+            }
+
+            html += `<br><br><div class='btn-ready'>TAP TO CONTINUE</div>`;
+
+            elMsg.innerHTML = html;
+            elMsg.style.display = "block";
+            
+            // Note: We do NOT call loop() here. We wait for touchstart.
+        }
+
         function calculatePlasticity() {
-            // Find segment closest to player Y
-            // Since we push to index 0, index changes. 
-            // We approximate by iterating or just checking index 0 is top, last is bottom.
-            // But we unshift new segments to Top. So Index 0 is Y=0.
             const playerIndex = Math.floor(player.y / path.segmentHeight);
             const currentSeg = path.segments[playerIndex];
-
             if(!currentSeg) return;
 
             const center = currentSeg.x;
@@ -312,7 +270,6 @@
             const sum = metrics.errors.reduce((a, b) => a + b, 0);
             const avg = sum / metrics.errors.length;
 
-            // Mobile Tolerance: 0.55 avg error allowed (keyboard was 0.4)
             if (metrics.errors.length === metrics.historySize && avg < 0.55) {
                 metrics.stabilityTimer++;
             } else {
@@ -328,43 +285,34 @@
             }
         }
 
-        function levelUp() {
-            state.level++;
-            setupLevel(state.level);
-            state.score += 500;
-        }
-
         function update() {
-            if(state.gameOver) return;
+            if(state.gameOver || state.waitingForTap) return;
 
-            // 1. Movement
+            // Movement
             let move = 0;
             if(inputs.left) move = -player.speed;
             if(inputs.right) move = player.speed;
 
-            if(state.inverted) move = -move; // Objective C: Reversal
+            if(state.inverted) move = -move;
 
             player.x += move;
 
-            // 2. Path Generation
+            // Path Gen
             path.noiseOffset += 0.05 * (1 + (state.level * 0.05));
             const wave = Math.sin(path.noiseOffset) * (canvas.width * 0.35); 
             let centerX = (canvas.width / 2) + wave;
 
-            // Keep path somewhat on screen
             const limit = path.currentWidth/2 + 10;
             if(centerX < limit) centerX = limit;
             if(centerX > canvas.width - limit) centerX = canvas.width - limit;
 
-            // Add new segment at top (y=0)
             path.segments.unshift({ x: centerX, w: path.currentWidth });
             
-            // Remove old from bottom
             if(path.segments.length * path.segmentHeight > canvas.height + 50) {
                 path.segments.pop();
             }
 
-            // 3. Collision
+            // Collision
             const playerIndex = Math.floor(player.y / path.segmentHeight);
             const seg = path.segments[playerIndex];
             
@@ -376,21 +324,17 @@
                 }
             }
 
-            // 4. Update Stats
             state.score++;
             calculatePlasticity();
             updateHUD();
         }
 
         function draw() {
-            // Background
             ctx.fillStyle = '#111';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Draw Tunnel
+            // Banks
             ctx.beginPath();
-            
-            // Left Bank
             ctx.fillStyle = state.inverted ? '#422' : '#223';
             ctx.moveTo(0, 0);
             for(let i=0; i<path.segments.length; i++) {
@@ -400,7 +344,6 @@
             ctx.lineTo(0, canvas.height);
             ctx.fill();
 
-            // Right Bank
             ctx.beginPath();
             ctx.moveTo(canvas.width, 0);
             for(let i=0; i<path.segments.length; i++) {
@@ -414,7 +357,6 @@
             ctx.strokeStyle = '#333';
             ctx.beginPath();
             for(let i=0; i<path.segments.length; i++) {
-                // Optimization: Draw every 2nd segment line to save CPU
                 if(i%2===0) {
                     const s = path.segments[i];
                     ctx.lineTo(s.x, i * path.segmentHeight);
@@ -428,7 +370,6 @@
             ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
             ctx.fill();
 
-            // Adaptation Glow (Feedback)
             if(state.adaptation > 50) {
                 ctx.strokeStyle = `rgba(255,255,255,${(state.adaptation-50)/50})`;
                 ctx.lineWidth = 2;
@@ -437,13 +378,11 @@
         }
 
         function updateHUD() {
-            // Optimization: Update text only every 5 frames to save DOM reflows
             if(state.frames % 5 === 0) {
                 elScore.innerText = state.score;
                 elLevel.innerText = state.level;
                 elInvert.style.display = state.inverted ? "block" : "none";
                 elBar.style.width = state.adaptation + "%";
-                
                 if(state.adaptation > 90) elBar.style.background = "#0f0";
                 else elBar.style.background = "linear-gradient(90deg, #00d2ff, #3a7bd5)";
             }
