@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Neuro Drift</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Courier New', Courier, monospace;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        canvas { display: block; }
+
+        /* HUD */
+        #hud {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        
+        #mode-indicator {
+            text-align: center;
+            font-size: 24px;
+            font-weight: bold;
+            padding: 10px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 8px;
+            transition: color 0.2s;
+        }
+        
+        #timer-bar-box {
+            width: 100%;
+            height: 6px;
+            background: #333;
+            margin-top: 10px;
+            position: relative;
+        }
+        #timer-bar {
+            width: 100%;
+            height: 100%;
+            background: #fff;
+            transform-origin: left;
+        }
+
+        #score-box {
+            font-size: 30px;
+            color: #fff;
+            text-align: right;
+        }
+
+        #controls {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            display: flex;
+            z-index: 10;
+        }
+        .touch-zone { width: 50%; height: 100%; }
+
+        /* Menus */
+        #menu, #game-over {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 20;
+        }
+        .hidden { display: none !important; }
+        
+        h1 { color: #fff; font-size: 40px; margin-bottom: 5px; text-transform: uppercase; }
+        h2 { color: #888; font-size: 16px; margin-bottom: 30px; font-weight: normal; }
+        
+        .btn {
+            background: #fff;
+            color: #000;
+            padding: 15px 40px;
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+        }
+        .btn:active { background: #888; }
+        
+        /* Glitch Effect CSS */
+        .glitch-anim {
+            animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+        }
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-1px, 0, 0); }
+            20%, 80% { transform: translate3d(2px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+            40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="hud">
+        <div id="top-panel">
+            <div id="mode-indicator">SYSTEM NORMAL</div>
+            <div id="timer-bar-box"><div id="timer-bar"></div></div>
+        </div>
+        <div id="score-box">0</div>
+    </div>
+
+    <div id="controls">
+        <div id="left-zone" class="touch-zone"></div>
+        <div id="right-zone" class="touch-zone"></div>
+    </div>
+
+    <div id="menu">
+        <h1>NEURO DRIFT</h1>
+        <h2>BRAIN REWIRING PROTOCOL</h2>
+        <p style="color:#aaa; text-align:center; max-width:80%">Tap Left/Right to steer.<br>Watch the timer.<br>When it hits zero, controls FLIP.</p>
+        <div class="btn" onclick="startGame()">INITIATE</div>
+    </div>
+
+    <div id="game-over" class="hidden">
+        <h1 style="color:#f00">SYNC LOST</h1>
+        <p id="final-score" style="color:#fff; font-size: 20px; margin-bottom: 20px;">Score: 0</p>
+        <div class="btn" onclick="startGame()">RETRY</div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // --- CONFIG ---
+    let width, height;
+    let gameRunning = false;
+    let score = 0;
+    
+    // Player
+    let playerX = 0; // -1 to 1 (screen center relative)
+    let playerSpeed = 0.035; // Lateral speed
+    let health = 100;
+    
+    // Road Math
+    let roadPoints = []; // Stores the curve data
+    let totalTime = 0;
+    let speed = 5; // Forward speed illusion
+    
+    // The "Neuro" Mechanic
+    let isInverted = false;
+    let switchTimer = 0;
+    const SWITCH_INTERVAL = 600; // Frames (approx 10 sec)
+    
+    // Inputs
+    let holdLeft = false;
+    let holdRight = false;
+
+    // Colors
+    const COLOR_NORMAL = '#00aaff'; // Blue
+    const COLOR_INVERT = '#ffaa00'; // Orange
+    const COLOR_BG_NORMAL = '#001122';
+    const COLOR_BG_INVERT = '#221100';
+
+    // --- SETUP ---
+    function resize() {
+        width = window.innerWidth;
+        height = window.innerHeight;
+        canvas.width = width;
+        canvas.height = height;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // Input Handling
+    const lZone = document.getElementById('left-zone');
+    const rZone = document.getElementById('right-zone');
+
+    function inputStart(side, e) {
+        if(e) e.preventDefault();
+        if(side === 'left') holdLeft = true;
+        if(side === 'right') holdRight = true;
+    }
+    function inputEnd(side, e) {
+        if(e) e.preventDefault();
+        if(side === 'left') holdLeft = false;
+        if(side === 'right') holdRight = false;
+    }
+
+    lZone.addEventListener('touchstart', e => inputStart('left', e));
+    lZone.addEventListener('touchend', e => inputEnd('left', e));
+    rZone.addEventListener('touchstart', e => inputStart('right', e));
+    rZone.addEventListener('touchend', e => inputEnd('right', e));
+
+    // Mouse for PC
+    lZone.addEventListener('mousedown', () => inputStart('left'));
+    lZone.addEventListener('mouseup', () => inputEnd('left'));
+    lZone.addEventListener('mouseleave', () => inputEnd('left'));
+    rZone.addEventListener('mousedown', () => inputStart('right'));
+    rZone.addEventListener('mouseup', () => inputEnd('right'));
+    rZone.addEventListener('mouseleave', () => inputEnd('right'));
+
+    // --- GAME LOOP ---
+
+    function startGame() {
+        gameRunning = true;
+        score = 0;
+        health = 100;
+        playerX = 0;
+        totalTime = 0;
+        
+        isInverted = false;
+        switchTimer = SWITCH_INTERVAL;
+        
+        // Reset Road
+        roadPoints = [];
+        for(let i=0; i<height; i+=5) {
+            roadPoints.push({y: i, curve: 0});
+        }
+
+        document.getElementById('menu').classList.add('hidden');
+        document.getElementById('game-over').classList.add('hidden');
+        updateModeUI();
+        
+        requestAnimationFrame(loop);
+    }
+
+    function switchMode() {
+        isInverted = !isInverted;
+        switchTimer = SWITCH_INTERVAL;
+        
+        // Visual Feedback
+        const hud = document.getElementById('hud');
+        hud.classList.remove('glitch-anim');
+        void hud.offsetWidth; // Trigger reflow
+        hud.classList.add('glitch-anim');
+        
+        updateModeUI();
+    }
+
+    function updateModeUI() {
+        const ind = document.getElementById('mode-indicator');
+        const body = document.body;
+        
+        if(isInverted) {
+            ind.innerText = "⚠ CONTROLS INVERTED ⚠";
+            ind.style.color = COLOR_INVERT;
+            ind.style.borderColor = COLOR_INVERT;
+            ind.style.border = "2px solid " + COLOR_INVERT;
+            // body.style.backgroundColor = COLOR_BG_INVERT;
+        } else {
+            ind.innerText = "SYSTEM NORMAL";
+            ind.style.color = COLOR_NORMAL;
+            ind.style.borderColor = COLOR_NORMAL;
+            ind.style.border = "2px solid " + COLOR_NORMAL;
+            // body.style.backgroundColor = COLOR_BG_NORMAL;
+        }
+    }
+
+    function update() {
+        if(!gameRunning) return;
+
+        // 1. Timer Logic
+        switchTimer--;
+        let pct = (switchTimer / SWITCH_INTERVAL) * 100;
+        document.getElementById('timer-bar').style.width = pct + "%";
+        
+        if(switchTimer <= 0) {
+            switchMode();
+        }
+
+        // 2. Road Generation (Procedural Curve)
+        totalTime += 0.05;
+        // Complex curve using sum of sines for unpredictability
+        let currentCurve = Math.sin(totalTime) * 0.5 + Math.sin(totalTime * 0.3) * 0.5; 
+        
+        // Shift road points down (simulation of speed)
+        // We actually just shift the curve value
+        roadPoints.shift(); // Remove bottom
+        roadPoints.push({y: 0, curve: currentCurve}); // Add new at top (conceptually far away)
+
+        // 3. Player Movement
+        let move = 0;
+        if(holdLeft) move -= playerSpeed;
+        if(holdRight) move += playerSpeed;
+
+        if(isInverted) move *= -1; // THE REWIRE MECHANIC
+
+        playerX += move;
+
+        // 4. Calculate Road Position at Player Y (Near bottom of screen)
+        // We look at the "oldest" points which are now at the bottom of screen
+        let roadCenter = roadPoints[0].curve; 
+        
+        // 5. Collision / Bounds
+        let roadWidth = 0.6; // 60% of screen
+        // playerX is -1 to 1. roadCenter is approx -1 to 1.
+        
+        let diff = Math.abs(playerX - roadCenter);
+        let limit = roadWidth / 2;
+        
+        if(diff > limit) {
+            // OFF ROAD
+            health -= 2;
+            // Shake screen
+            ctx.save();
+            ctx.translate((Math.random()-0.5)*10, (Math.random()-0.5)*10);
+        } else {
+            // ON ROAD
+            score++;
+            if(health < 100) health += 0.2; // Regen
+        }
+
+        if(health <= 0) {
+            gameRunning = false;
+            document.getElementById('final-score').innerText = "Distance: " + score;
+            document.getElementById('game-over').classList.remove('hidden');
+        }
+
+        document.getElementById('score-box').innerText = score;
+        
+        // Difficulty scaling
+        if(score % 1000 === 0) {
+            speed += 0.5;
+        }
+    }
+
+    function draw() {
+        // Draw Background
+        ctx.fillStyle = isInverted ? COLOR_BG_INVERT : COLOR_BG_NORMAL;
+        ctx.fillRect(0, 0, width, height);
+        
+        if(gameRunning && health < 100 && diff > limit) ctx.restore(); // Restore from shake
+
+        let roadColor = isInverted ? COLOR_INVERT : COLOR_NORMAL;
+        
+        // Draw Road (Pseudo-3D effect)
+        // We iterate from top (horizon) to bottom (player)
+        // But our array is shifted so index 0 is bottom.
+        // Let's draw strips.
+        
+        let centerX = width / 2;
+        
+        for(let i=0; i < roadPoints.length; i++) {
+            // Perspective transform
+            // i=0 is bottom (near), i=max is top (far)
+            let p = roadPoints[i];
+            
+            // Map index to Y position
+            // We want index roadPoints.length-1 to be at y=0 (horizon)
+            // and index 0 to be at y=height
+            
+            let perspective = 1 - (i / roadPoints.length); // 1 at bottom, 0 at top
+            let drawY = height - (i * (height/roadPoints.length));
+            
+            // Width gets smaller as we go up
+            let rectW = (width * 0.6) * perspective; 
+            let curveOffset = p.curve * (width/2); 
+            
+            let drawX = centerX + curveOffset - (rectW/2);
+            
+            // Draw segment
+            ctx.fillStyle = (Math.floor(i/5) % 2 === 0) ? roadColor : 'rgba(0,0,0,0)'; // Striped road
+            ctx.globalAlpha = 0.3 + (perspective * 0.7); // Fade into distance
+            ctx.fillRect(drawX, drawY, rectW, (height/roadPoints.length) + 1);
+        }
+        ctx.globalAlpha = 1;
+
+        // Draw Player
+        // Player is fixed at bottom center visually, but moves relative to road center
+        let playerScreenX = centerX + (playerX * (width/2));
+        let playerScreenY = height - 100;
+
+        ctx.fillStyle = '#fff';
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = roadColor;
+        
+        // Triangle shape
+        ctx.beginPath();
+        ctx.moveTo(playerScreenX, playerScreenY);
+        ctx.lineTo(playerScreenX - 15, playerScreenY + 30);
+        ctx.lineTo(playerScreenX + 15, playerScreenY + 30);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // Draw Health Bar (Vertical on side)
+        ctx.fillStyle = '#333';
+        ctx.fillRect(width - 20, height/2 - 100, 10, 200);
+        
+        let hpColor = '#0f0';
+        if(health < 50) hpColor = '#ff0';
+        if(health < 20) hpColor = '#f00';
+        
+        ctx.fillStyle = hpColor;
+        let hVal = (health / 100) * 200;
+        ctx.fillRect(width - 20, height/2 + 100 - hVal, 10, hVal);
+    }
+
+    function loop() {
+        if(gameRunning) {
+            update();
+            draw();
+            requestAnimationFrame(loop);
+        }
+    }
+</script>
+</body>
+</html>
