@@ -2,409 +2,444 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Neuro-Drift J7 Patch</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neuro-Walker: Plasticity Trainer</title>
     <style>
+        :root {
+            --bg-color: #0f172a;
+            --text-color: #e2e8f0;
+            --accent-normal: #38bdf8;
+            --accent-flipped: #f43f5e;
+            --wall-color: #334155;
+            --path-color: #1e293b;
+        }
+
         body {
             margin: 0;
-            background-color: #000;
-            color: #eee;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
             font-family: 'Courier New', Courier, monospace;
-            overflow: hidden;
-            touch-action: none;
             display: flex;
             flex-direction: column;
             align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+            user-select: none;
         }
-        canvas { display: block; background-color: #000; }
+
+        #game-container {
+            position: relative;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            border: 2px solid var(--wall-color);
+        }
+
+        canvas {
+            display: block;
+            background-color: var(--path-color);
+        }
+
         #ui-layer {
             position: absolute;
-            top: 10px;
+            top: 0;
             left: 0;
             width: 100%;
-            padding: 0 10px;
-            box-sizing: border-box;
+            height: 100%;
             pointer-events: none;
-            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 10px;
+            box-sizing: border-box;
         }
-        h1 { margin: 0; font-size: 16px; color: #666; letter-spacing: 2px; }
-        .hud-row { 
-            display: flex; justify-content: space-between; margin-top: 5px; 
-            font-weight: bold; font-size: 14px;
+
+        .hud-top {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            text-transform: uppercase;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px black;
         }
-        .stat { 
-            background: rgba(0,0,0,0.6); padding: 4px 8px; 
-            border-radius: 4px; border: 1px solid #333; 
-        }
-        .inverted-warning {
-            color: #ff3333; font-weight: bold; display: none;
-            animation: blink 0.8s infinite; font-size: 12px; padding-top: 6px;
-        }
-        #learning-bar-container {
-            width: 80%; height: 6px; background: #222; margin: 8px auto 0;
-            border-radius: 3px; overflow: hidden; border: 1px solid #444;
-        }
-        #learning-bar {
-            width: 0%; height: 100%;
-            background: linear-gradient(90deg, #00d2ff, #3a7bd5);
-            transition: width 0.2s;
-        }
-        .touch-hint {
-            position: absolute; bottom: 20px; width: 40%; height: 50px;
-            border: 2px dashed rgba(255,255,255,0.1); border-radius: 10px;
-            display: flex; align-items: center; justify-content: center;
-            color: rgba(255,255,255,0.2); font-size: 12px; pointer-events: none;
-        }
-        #left-hint { left: 5%; }
-        #right-hint { right: 5%; }
-        @keyframes blink { 50% { opacity: 0; } }
-        
-        #message {
-            position: absolute; top: 40%; left: 50%;
+
+        #status-msg {
+            position: absolute;
+            top: 50%;
+            left: 50%;
             transform: translate(-50%, -50%);
-            font-size: 20px; background: rgba(0,0,0,0.9);
-            padding: 20px; border: 1px solid #fff;
-            display: none; text-align: center;
-            width: 85%; border-radius: 8px;
-            box-shadow: 0 0 15px #000; z-index: 10;
+            text-align: center;
+            background: rgba(15, 23, 42, 0.9);
+            padding: 20px;
+            border: 1px solid var(--text-color);
+            display: none;
         }
-        .btn-ready {
-            margin-top: 15px; padding: 10px 20px;
-            background: #222; border: 1px solid #fff;
-            color: #fff; display: inline-block;
+
+        .mode-indicator {
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+
+        .mode-normal { background-color: var(--accent-normal); color: #000; }
+        .mode-flipped { background-color: var(--accent-flipped); color: #fff; }
+
+        /* Scanline effect for retro feel/low resource look */
+        .scanlines {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.1) 50%, rgba(0,0,0,0.1));
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 10;
         }
     </style>
 </head>
 <body>
 
-    <div id="ui-layer">
-        <h1>NEURO-DRIFT</h1>
-        <div class="hud-row">
-            <div class="stat">LVL <span id="lvl-display">1</span></div>
-            <div class="inverted-warning" id="invert-display">⚠ REVERSED ⚠</div>
-            <div class="stat"><span id="score-display">0</span></div>
+    <div id="game-container">
+        <canvas id="gameCanvas" width="600" height="600"></canvas>
+        <div class="scanlines"></div>
+        
+        <div id="ui-layer">
+            <div class="hud-top">
+                <span id="level-display">Level: 1</span>
+                <span id="mode-display" class="mode-indicator mode-normal">Mode: MOTOR ACQUISITION</span>
+            </div>
         </div>
-        <div id="learning-bar-container">
-            <div id="learning-bar"></div>
+
+        <div id="status-msg">
+            <h2 id="msg-title">NEURAL PATHWAY FORMED</h2>
+            <p id="msg-body">Initiating control reversal...</p>
+            <p style="font-size: 0.8em; color: #aaa;">Press SPACE to Continue</p>
         </div>
     </div>
 
-    <div id="left-hint" class="touch-hint">LEFT</div>
-    <div id="right-hint" class="touch-hint">RIGHT</div>
-
-    <canvas id="gameCanvas"></canvas>
-    <div id="message">TAP TO START</div>
-
     <script>
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d', { alpha: false });
+        /**
+         * NEURO-WALKER GAME ENGINE
+         * Optimized for pattern learning and control inversion.
+         */
 
-        function resize() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-        }
-        window.addEventListener('resize', resize);
-        resize();
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const statusBox = document.getElementById('status-msg');
+        const msgTitle = document.getElementById('msg-title');
+        const msgBody = document.getElementById('msg-body');
+        const modeDisplay = document.getElementById('mode-display');
+        const levelDisplay = document.getElementById('level-display');
 
         // Game State
-        const state = {
-            running: false,
-            waitingForTap: false, // NEW: Specific state for level transitions
-            gameOver: false,
-            score: 0,
-            level: 1,
-            adaptation: 0, 
-            inverted: false,
-            frames: 0
+        const STATE = {
+            level: 1,           // The actual difficulty level (size of maze)
+            isFlipped: false,   // false = Normal Controls, true = Inverted Controls
+            isPlaying: false,
+            gridSize: 20,       // Size of one tile in pixels
+            cols: 0,
+            rows: 0
         };
 
-        const player = { x: 0, y: 0, radius: 10, speed: 0, baseSpeedMult: 0.015 };
-        const path = {
-            segments: [], segmentHeight: 10, 
-            baseWidthRatio: 0.5, currentWidth: 0, 
-            noiseOffset: 0, speed: 4
-        };
-        const metrics = { errors: [], historySize: 45, stabilityTimer: 0, requiredStabilityTime: 300 };
-        const inputs = { left: false, right: false };
+        // Entities
+        const player = { x: 0, y: 0, color: '#38bdf8' };
+        const goal = { x: 0, y: 0, color: '#4ade80' };
+        
+        // Map Data (1 = Wall, 0 = Path)
+        let map = [];
+        // We store the seed or the map itself to ensure the Flipped level is IDENTICAL
+        let currentMapLayout = []; 
 
-        // UI
-        const elLevel = document.getElementById('lvl-display');
-        const elScore = document.getElementById('score-display');
-        const elInvert = document.getElementById('invert-display');
-        const elBar = document.getElementById('learning-bar');
-        const elMsg = document.getElementById('message');
+        // Input Tracking
+        const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
 
-        // --- Touch Handling ---
-        function handleTouch(e) {
-            e.preventDefault();
-            inputs.left = false;
-            inputs.right = false;
-
-            const halfWidth = canvas.width / 2;
-            for (let i = 0; i < e.touches.length; i++) {
-                if (e.touches[i].clientX < halfWidth) inputs.left = true;
-                else inputs.right = true;
-            }
-
-            // Logic for Tapping based on State
-            if (e.type === 'touchstart') {
-                if (state.gameOver) {
-                    resetGame(); // Restart from Lvl 1
-                } 
-                else if (state.waitingForTap) {
-                    resumeGame(); // Continue to next Level
-                }
-                else if (!state.running) {
-                    startGame(); // Initial Start
-                }
-            }
-        }
-
-        window.addEventListener('touchstart', handleTouch, { passive: false });
-        window.addEventListener('touchmove', handleTouch, { passive: false });
-        window.addEventListener('touchend', handleTouch, { passive: false });
-
-        // --- Core Logic ---
-
-        function init() {
-            resetGame();
-            state.running = false; // Ensure it starts paused
-            draw();
-            elMsg.style.display = "block";
-            elMsg.innerHTML = "NEURO-DRIFT<br><span style='font-size:14px; color:#aaa'>Left Hand Trainer</span><br><br>TAP TO START";
-        }
-
-        function resetGame() {
-            state.running = false;
-            state.waitingForTap = false;
-            state.gameOver = false;
-            state.score = 0;
-            state.level = 1;
-            state.inverted = false;
-            state.adaptation = 0;
+        // --- CORE LOGIC: Maze Generation (Recursive Backtracker) ---
+        // This ensures a solvable path exists.
+        function generateMaze(difficulty) {
+            // Difficulty determines grid size
+            // Level 1: 15 cols, Level 2: 19 cols, etc.
+            const baseSize = 15;
+            const size = baseSize + (difficulty * 2);
             
-            player.x = canvas.width / 2;
-            player.y = canvas.height * 0.75;
-            player.speed = canvas.width * player.baseSpeedMult;
-
-            path.currentWidth = canvas.width * path.baseWidthRatio;
-            path.segments = [];
-            for(let i=0; i < canvas.height / path.segmentHeight + 5; i++) {
-                path.segments.push({ x: canvas.width/2, w: path.currentWidth });
+            STATE.cols = size;
+            STATE.rows = size;
+            
+            // Adjust canvas size scaling if needed, or keep canvas fixed and scale tiles
+            // Here we adjust tile size to fit the canvas to keep rendering "normal"
+            STATE.gridSize = Math.floor(canvas.width / STATE.cols);
+            
+            // Initialize Grid with Walls
+            let grid = [];
+            for(let y=0; y<STATE.rows; y++) {
+                let row = [];
+                for(let x=0; x<STATE.cols; x++) {
+                    row.push(1);
+                }
+                grid.push(row);
             }
 
-            metrics.stabilityTimer = 0;
-            metrics.errors = [];
-            updateHUD();
+            // Carver
+            const dirs = [
+                {x:0, y:-2}, {x:0, y:2}, {x:-2, y:0}, {x:2, y:0}
+            ];
+            
+            function shuffle(array) {
+                for (let i = array.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [array[i], array[j]] = [array[j], array[i]];
+                }
+            }
+
+            function carve(x, y) {
+                grid[y][x] = 0;
+                shuffle(dirs);
+                
+                for(let d of dirs) {
+                    let nx = x + d.x;
+                    let ny = y + d.y;
+                    
+                    if(nx > 0 && nx < STATE.cols-1 && ny > 0 && ny < STATE.rows-1 && grid[ny][nx] === 1) {
+                        grid[y + d.y/2][x + d.x/2] = 0; // Knock down wall between
+                        carve(nx, ny);
+                    }
+                }
+            }
+
+            // Start carving from (1,1)
+            carve(1, 1);
+            
+            // Set Goal at bottom right-ish
+            // Find a valid empty spot near bottom right
+            let gx = STATE.cols - 2;
+            let gy = STATE.rows - 2;
+            while(grid[gy][gx] === 1) {
+                gx--;
+                if(gx < STATE.cols/2) { gx = STATE.cols-2; gy--; }
+            }
+            goal.x = gx;
+            goal.y = gy;
+
+            // Set Player Start
+            player.x = 1;
+            player.y = 1;
+
+            return grid;
         }
 
-        function startGame() {
-            state.running = true;
-            elMsg.style.display = "none";
-            loop();
+        // --- INPUT HANDLING ---
+        window.addEventListener('keydown', (e) => {
+            if(keys.hasOwnProperty(e.code)) keys[e.code] = true;
+            if(e.code === "Space" && !STATE.isPlaying) {
+                resumeGame();
+            }
+        });
+        window.addEventListener('keyup', (e) => {
+            if(keys.hasOwnProperty(e.code)) keys[e.code] = false;
+        });
+
+        function handleInput() {
+            if (!STATE.isPlaying) return;
+
+            // Movement Delay/Speed limiter for controlled movement
+            // We use a simple cooldown or just per-frame movement.
+            // For a maze, discrete movement (tile by tile) or smooth? 
+            // Smooth is harder for control flipping. Let's do semi-smooth with collision.
+            
+            const speed = 0.15; // sub-pixels per frame
+            
+            let dx = 0;
+            let dy = 0;
+
+            if (keys.ArrowUp) dy -= 1;
+            if (keys.ArrowDown) dy += 1;
+            if (keys.ArrowLeft) dx -= 1;
+            if (keys.ArrowRight) dx += 1;
+
+            // --- THE NEUROPLASTICITY CORE ---
+            // If Level is Flipped, reverse inputs
+            if (STATE.isFlipped) {
+                dx = -dx;
+                dy = -dy;
+            }
+
+            movePlayer(dx * speed, dy * speed);
+        }
+
+        function movePlayer(dx, dy) {
+            // Proposed new position
+            let nextX = player.x + dx;
+            let nextY = player.y + dy;
+
+            // Collision Detection (AABB vs Grid Walls)
+            // Player size is slightly smaller than tile to fit through
+            const size = 0.7; 
+            const offset = (1 - size) / 2;
+
+            // Check corners of the player square against the map
+            if (!checkCollision(nextX + offset, player.y + offset, size) && 
+                !checkCollision(nextX + offset + size, player.y + offset, size) &&
+                !checkCollision(nextX + offset, player.y + offset + size, size) &&
+                !checkCollision(nextX + offset + size, player.y + offset + size, size)) {
+                player.x = nextX;
+            }
+
+            if (!checkCollision(player.x + offset, nextY + offset, size) && 
+                !checkCollision(player.x + offset + size, nextY + offset, size) &&
+                !checkCollision(player.x + offset, nextY + offset + size, size) &&
+                !checkCollision(player.x + offset + size, nextY + offset + size, size)) {
+                player.y = nextY;
+            }
+            
+            checkWin();
+        }
+
+        function checkCollision(x, y) {
+            let gridX = Math.floor(x);
+            let gridY = Math.floor(y);
+            
+            // Out of bounds
+            if (gridY < 0 || gridY >= STATE.rows || gridX < 0 || gridX >= STATE.cols) return true;
+            
+            // Wall
+            return currentMapLayout[gridY][gridX] === 1;
+        }
+
+        function checkWin() {
+            // Distance to goal
+            let dist = Math.hypot(player.x - goal.x, player.y - goal.y);
+            if (dist < 0.5) {
+                levelComplete();
+            }
+        }
+
+        // --- GAME FLOW ---
+
+        function initGame() {
+            // Initial load
+            loadLevelPair(1);
+            STATE.isPlaying = true;
+            render();
+        }
+
+        function loadLevelPair(levelIndex) {
+            STATE.level = levelIndex;
+            STATE.isFlipped = false; // Start normal
+            currentMapLayout = generateMaze(STATE.level);
+            updateUI();
+        }
+
+        function levelComplete() {
+            STATE.isPlaying = false;
+            
+            if (!STATE.isFlipped) {
+                // Phase 1 Complete: Brain has learned the pattern.
+                // Trigger Phase 2: Switch Flip, Same Level.
+                msgTitle.innerText = "PATTERN ACQUIRED";
+                msgBody.innerText = "The brain has mapped the spatial data.\n\nActivating Neuro-Plasticity Switch.\nControls are now FLIPPED.\nNavigate the SAME path.";
+                statusBox.style.display = 'block';
+                
+                // Set state for next resume
+                STATE.isFlipped = true;
+                
+            } else {
+                // Phase 2 Complete: Brain has mastered the inversion.
+                // Trigger Phase 3: New Level, Reset Switch.
+                msgTitle.innerText = "NEURAL ADAPTATION COMPLETE";
+                msgBody.innerText = "Synaptic connection strengthened.\n\nPreparing next complexity tier.\nControls resetting to NORMAL.";
+                statusBox.style.display = 'block';
+
+                // Prepare next level
+                STATE.level++;
+                STATE.isFlipped = false; // Reset to normal for new map
+            }
         }
 
         function resumeGame() {
-            state.waitingForTap = false;
-            state.running = true;
-            elMsg.style.display = "none";
-            loop();
-        }
-
-        function setupLevel(lvl) {
-            state.level = lvl;
-            state.inverted = (lvl % 2 === 0);
+            statusBox.style.display = 'none';
+            STATE.isPlaying = true;
             
-            const difficultyStep = Math.ceil(lvl / 2);
-            const widthRatio = Math.max(0.2, 0.5 - (difficultyStep * 0.05));
-            path.currentWidth = canvas.width * widthRatio;
-            path.speed = 4 + (difficultyStep * 0.5); 
-
-            metrics.stabilityTimer = 0;
-            metrics.errors = []; // Clear history so we don't level up instantly again
-            state.adaptation = 0;
-            
-            updateHUD();
-        }
-
-        function levelUp() {
-            // 1. Pause Logic
-            state.running = false; 
-            state.waitingForTap = true;
-
-            // 2. Setup Next Level Physics
-            state.level++;
-            setupLevel(state.level);
-
-            // 3. Show Interstitial Screen
-            let html = `<strong>LEVEL ${state.level}</strong><br><br>`;
-            
-            if(state.inverted) {
-                html += `<span style="color:#ff4444; font-size:18px; border:1px solid #ff4444; padding:5px;">⚠ CONTROLS REVERSED ⚠</span>`;
-                html += `<br><br><span style="font-size:14px; color:#aaa">Left is Right<br>Right is Left</span>`;
+            if(STATE.isFlipped) {
+                // Reset player to start, Keep Map same
+                player.x = 1; 
+                player.y = 1;
             } else {
-                html += `<span style="color:#44ffff; font-size:18px; border:1px solid #44ffff; padding:5px;">CONTROLS NORMALIZED</span>`;
-                html += `<br><br><span style="font-size:14px; color:#aaa">Back to standard input</span>`;
+                // Generate New Map
+                currentMapLayout = generateMaze(STATE.level);
             }
-
-            html += `<br><br><div class='btn-ready'>TAP TO CONTINUE</div>`;
-
-            elMsg.innerHTML = html;
-            elMsg.style.display = "block";
             
-            // Note: We do NOT call loop() here. We wait for touchstart.
+            updateUI();
         }
 
-        function calculatePlasticity() {
-            const playerIndex = Math.floor(player.y / path.segmentHeight);
-            const currentSeg = path.segments[playerIndex];
-            if(!currentSeg) return;
-
-            const center = currentSeg.x;
-            const deviation = Math.abs(player.x - center);
-            const normalizedError = deviation / (currentSeg.w / 2); 
-
-            metrics.errors.push(normalizedError);
-            if(metrics.errors.length > metrics.historySize) metrics.errors.shift();
-
-            const sum = metrics.errors.reduce((a, b) => a + b, 0);
-            const avg = sum / metrics.errors.length;
-
-            if (metrics.errors.length === metrics.historySize && avg < 0.55) {
-                metrics.stabilityTimer++;
+        function updateUI() {
+            levelDisplay.innerText = `Level: ${STATE.level}`;
+            if (STATE.isFlipped) {
+                modeDisplay.innerText = "Mode: NEURO-SWITCH (FLIPPED)";
+                modeDisplay.className = "mode-indicator mode-flipped";
+                player.color = "#f43f5e"; // Red/Pink for danger/hard
             } else {
-                if(metrics.stabilityTimer > 0) metrics.stabilityTimer -= 2; 
-                if(metrics.stabilityTimer < 0) metrics.stabilityTimer = 0;
-            }
-
-            const targetTime = metrics.requiredStabilityTime + (state.level * 60);
-            state.adaptation = Math.min(100, (metrics.stabilityTimer / targetTime) * 100);
-
-            if(state.adaptation >= 100) {
-                levelUp();
+                modeDisplay.innerText = "Mode: MOTOR ACQUISITION";
+                modeDisplay.className = "mode-indicator mode-normal";
+                player.color = "#38bdf8"; // Blue for calm/learning
             }
         }
 
-        function update() {
-            if(state.gameOver || state.waitingForTap) return;
+        // --- RENDERING ---
 
-            // Movement
-            let move = 0;
-            if(inputs.left) move = -player.speed;
-            if(inputs.right) move = player.speed;
-
-            if(state.inverted) move = -move;
-
-            player.x += move;
-
-            // Path Gen
-            path.noiseOffset += 0.05 * (1 + (state.level * 0.05));
-            const wave = Math.sin(path.noiseOffset) * (canvas.width * 0.35); 
-            let centerX = (canvas.width / 2) + wave;
-
-            const limit = path.currentWidth/2 + 10;
-            if(centerX < limit) centerX = limit;
-            if(centerX > canvas.width - limit) centerX = canvas.width - limit;
-
-            path.segments.unshift({ x: centerX, w: path.currentWidth });
+        function drawMap() {
+            ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--wall-color');
             
-            if(path.segments.length * path.segmentHeight > canvas.height + 50) {
-                path.segments.pop();
-            }
-
-            // Collision
-            const playerIndex = Math.floor(player.y / path.segmentHeight);
-            const seg = path.segments[playerIndex];
-            
-            if(seg) {
-                const halfW = seg.w / 2;
-                if (player.x - player.radius < seg.x - halfW || 
-                    player.x + player.radius > seg.x + halfW) {
-                    gameOver();
+            for(let y=0; y<STATE.rows; y++) {
+                for(let x=0; x<STATE.cols; x++) {
+                    if(currentMapLayout[y][x] === 1) {
+                        ctx.fillRect(x * STATE.gridSize, y * STATE.gridSize, STATE.gridSize, STATE.gridSize);
+                    }
                 }
             }
-
-            state.score++;
-            calculatePlasticity();
-            updateHUD();
         }
 
-        function draw() {
-            ctx.fillStyle = '#111';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        function drawEntities() {
+            // Draw Goal
+            ctx.fillStyle = goal.color;
+            // Add a little pulse effect
+            const pulse = Math.sin(Date.now() / 200) * 2;
+            ctx.fillRect(
+                goal.x * STATE.gridSize + 2 - pulse/2, 
+                goal.y * STATE.gridSize + 2 - pulse/2, 
+                STATE.gridSize - 4 + pulse, 
+                STATE.gridSize - 4 + pulse
+            );
 
-            // Banks
-            ctx.beginPath();
-            ctx.fillStyle = state.inverted ? '#422' : '#223';
-            ctx.moveTo(0, 0);
-            for(let i=0; i<path.segments.length; i++) {
-                const s = path.segments[i];
-                ctx.lineTo(s.x - (s.w/2), i * path.segmentHeight);
-            }
-            ctx.lineTo(0, canvas.height);
-            ctx.fill();
+            // Draw Player
+            ctx.fillStyle = player.color;
+            const size = STATE.gridSize * 0.7;
+            const offset = (STATE.gridSize - size) / 2;
+            
+            // Interpolated position for smoothness (simple here)
+            ctx.fillRect(
+                player.x * STATE.gridSize + offset, 
+                player.y * STATE.gridSize + offset, 
+                size, 
+                size
+            );
 
-            ctx.beginPath();
-            ctx.moveTo(canvas.width, 0);
-            for(let i=0; i<path.segments.length; i++) {
-                const s = path.segments[i];
-                ctx.lineTo(s.x + (s.w/2), i * path.segmentHeight);
-            }
-            ctx.lineTo(canvas.width, canvas.height);
-            ctx.fill();
-
-            // Center Line
-            ctx.strokeStyle = '#333';
-            ctx.beginPath();
-            for(let i=0; i<path.segments.length; i++) {
-                if(i%2===0) {
-                    const s = path.segments[i];
-                    ctx.lineTo(s.x, i * path.segmentHeight);
-                }
-            }
-            ctx.stroke();
-
-            // Player
-            ctx.fillStyle = state.inverted ? '#f80' : '#0ff';
-            ctx.beginPath();
-            ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
-            ctx.fill();
-
-            if(state.adaptation > 50) {
-                ctx.strokeStyle = `rgba(255,255,255,${(state.adaptation-50)/50})`;
-                ctx.lineWidth = 2;
-                ctx.stroke();
-            }
+            // Draw "Eyes" to indicate direction (helps visualize the flip)
+            ctx.fillStyle = "white";
+            // Logic to draw eyes based on last movement could go here, 
+            // but abstract square is better for neuro-focus.
         }
 
-        function updateHUD() {
-            if(state.frames % 5 === 0) {
-                elScore.innerText = state.score;
-                elLevel.innerText = state.level;
-                elInvert.style.display = state.inverted ? "block" : "none";
-                elBar.style.width = state.adaptation + "%";
-                if(state.adaptation > 90) elBar.style.background = "#0f0";
-                else elBar.style.background = "linear-gradient(90deg, #00d2ff, #3a7bd5)";
-            }
-            state.frames++;
+        function render() {
+            // Clear
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw
+            drawMap();
+            drawEntities();
+
+            // Loop
+            handleInput();
+            requestAnimationFrame(render);
         }
 
-        function gameOver() {
-            state.gameOver = true;
-            state.running = false;
-            elMsg.innerHTML = `NEURAL LINK BROKEN<br>LVL: ${state.level}<br><br>TAP TO RETRY`;
-            elMsg.style.display = "block";
-        }
-
-        function loop() {
-            if(state.running) {
-                update();
-                draw();
-                requestAnimationFrame(loop);
-            }
-        }
-
-        init();
+        // Start
+        initGame();
 
     </script>
 </body>
